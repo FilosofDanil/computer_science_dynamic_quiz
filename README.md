@@ -54,3 +54,42 @@ Then run the produced binary:
 | Go   | 1.21 +  |
 
 No external runtime is needed once the binary is built.
+
+---
+
+## Running as a Telegram bot
+
+The same quiz runs inside Telegram via inline keyboards — no typing required, works on any device.
+
+### Setup
+
+1. Open Telegram, talk to [@BotFather](https://t.me/BotFather), run `/newbot`, and follow the prompts to get a bot token.
+2. Copy `.env.example` to `.env` and paste your token:
+   ```
+   TELEGRAM_BOT_TOKEN=123456:your-token-here
+   ```
+3. Start the bot server:
+   ```bash
+   go run . bot
+   # or, if you built a binary:
+   .\basics.exe bot
+   ```
+4. Open your bot in Telegram and send `/start`.
+
+### Bot commands
+
+| Command | Effect |
+|---------|--------|
+| `/start` | Start (or restart) a quiz session |
+| `/quit`  | End your current session |
+
+### How it works
+
+- Pick a category from an inline keyboard grid.
+- Choose **In order** or **Shuffle**.
+- Answer each question by tapping A / B / C / D buttons.
+- After each answer the correct answer, overview, and explanation are shown.
+- At the end your score is displayed with a **Play again** button.
+- Multiple users can play simultaneously; each chat has its own independent session.
+
+> Sessions are kept in memory. Restarting the bot process resets any in-progress quizzes.
