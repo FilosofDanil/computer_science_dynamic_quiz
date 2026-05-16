@@ -1,3 +1,5 @@
+// DEPRECATED: kept for reference; the Telegram bot is the active interface.
+// Build and run with: go run ./cli
 package main
 
 import (
@@ -8,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 
+	"basics/internal/quiz"
+	"basics/internal/storage"
 	"golang.org/x/term"
 )
 
@@ -35,7 +39,6 @@ func clearScreen() {
 	_ = cmd.Run()
 }
 
-// readKey blocks until the user presses a single key and returns it.
 func readKey() byte {
 	fd := int(os.Stdin.Fd())
 	oldState, err := term.MakeRaw(fd)
@@ -55,7 +58,6 @@ func pressAnyKey() {
 	readKey()
 }
 
-// wrapText wraps a string at the given column width without breaking words.
 func wrapText(text string, width int) string {
 	words := strings.Fields(text)
 	var lines []string
@@ -86,34 +88,34 @@ func printBanner() {
 	fmt.Println()
 }
 
-func printCategoryMenu() {
+func printCategoryMenu(topics []quiz.Topic) {
 	clearScreen()
 	printBanner()
 	fmt.Printf("  %s%sSelect a topic area%s\n\n", bold, yellow, reset)
 
-	for _, e := range categoryMenu {
-		count := countInCategory(e.cat)
+	for _, e := range quiz.CategoryMenu {
+		count := quiz.CountInCategory(topics, e.Cat)
 		fmt.Printf("  %s[%s]%s  %-26s %s(%d topics)%s\n",
-			bold+cyan, string(e.key), reset,
-			e.label,
+			bold+cyan, string(e.Key), reset,
+			e.Label,
 			dim, count, reset,
 		)
 	}
 	fmt.Println()
-	fmt.Printf("  %sPress a key (0–9):%s ", yellow, reset)
+	fmt.Printf("  %sPress a key (0–9, a–i):%s ", yellow, reset)
 }
 
-func selectCategory() []Topic {
-	validKeys := make(map[byte]categoryEntry)
-	for _, e := range categoryMenu {
-		validKeys[e.key] = e
+func selectCategory(topics []quiz.Topic) []quiz.Topic {
+	validKeys := make(map[byte]quiz.CategoryEntry)
+	for _, e := range quiz.CategoryMenu {
+		validKeys[e.Key] = e
 	}
 	for {
-		printCategoryMenu()
+		printCategoryMenu(topics)
 		key := readKey()
 		if entry, ok := validKeys[key]; ok {
 			fmt.Printf("%s\n", string(key))
-			return filterTopics(entry.cat)
+			return quiz.FilterTopics(topics, entry.Cat)
 		}
 	}
 }
@@ -138,7 +140,7 @@ func printProgressBar(current, total int) {
 	fmt.Printf("  %s[%s]%s %d/%d (%d%%)\n\n", dim, bar, reset, current, total, pct)
 }
 
-func runQuiz(topics []Topic) int {
+func runQuiz(allTopics []quiz.Topic, topics []quiz.Topic) int {
 	score := 0
 	total := len(topics)
 	labels := []string{"A", "B", "C", "D"}
@@ -148,23 +150,19 @@ func runQuiz(topics []Topic) int {
 		printBanner()
 		printProgressBar(i, total)
 
-		// Category label (no topic name — that's the answer!)
 		fmt.Printf("  %s%s%s\n", dim, topic.Category, reset)
 		fmt.Println()
 
-		// Scenario question
 		fmt.Printf("  %s%s%s\n", bold+white, wrapText(topic.Question, 62), reset)
 		fmt.Println()
 
-		options, correctIdx := buildOptions(topic)
+		options, correctIdx := quiz.BuildOptions(allTopics, topic)
 
-		// Display 4 topic-name options
 		for j, name := range options {
 			wrapped := wrapText(name, 58)
 			fmt.Printf("  %s%s)%s  %s\n\n", bold+cyan, labels[j], reset, wrapped)
 		}
 
-		// Read answer (A/B/C/D)
 		var chosen int
 		for {
 			fmt.Printf("  %sYour answer (A/B/C/D):%s ", yellow, reset)
@@ -187,8 +185,6 @@ func runQuiz(topics []Topic) int {
 			break
 		}
 
-		// ── Reveal ────────────────────────────────────────────────────────────
-
 		if chosen == correctIdx {
 			score++
 			fmt.Printf("  %s%s✓  Correct!%s\n", bold, green, reset)
@@ -197,19 +193,12 @@ func runQuiz(topics []Topic) int {
 				bold, red, reset, bold+yellow, topic.Name, reset)
 		}
 
-		// Divider
 		fmt.Printf("\n  %s────────────────────────────────────────────────────────%s\n\n", dim, reset)
-
-		// Topic name + one-sentence overview
 		fmt.Printf("  %s%s%s\n", bold+yellow, topic.Name, reset)
 		fmt.Println()
 		fmt.Printf("  %s%s%s\n", white, wrapText(topic.Overview, 63), reset)
-
-		// Beginner-friendly explanation
 		fmt.Println()
 		fmt.Printf("  %s%s%s\n", dim+white, wrapText(topic.Explanation, 63), reset)
-
-		// Divider + running score
 		fmt.Printf("\n  %s────────────────────────────────────────────────────────%s\n", dim, reset)
 		fmt.Printf("\n  %sScore so far: %d / %d%s\n", magenta, score, i+1, reset)
 
@@ -249,14 +238,14 @@ func printFinalScore(score, total int) {
 	fmt.Printf("  Run the program again any time to practice.\n\n")
 }
 
-func runCLI() {
-	// Step 1: category selection
-	topics := selectCategory()
+func runCLI(store storage.TopicStore) {
+	allTopics := store.All()
 
-	// Step 2: order / randomise
+	selected := selectCategory(allTopics)
+
 	clearScreen()
 	printBanner()
-	fmt.Printf("  %s%d topic(s) selected.%s\n", white, len(topics), reset)
+	fmt.Printf("  %s%d topic(s) selected.%s\n", white, len(selected), reset)
 	printOrderMenu()
 
 	for {
@@ -266,7 +255,7 @@ func runCLI() {
 			fmt.Printf("S\n")
 		case 'r':
 			fmt.Printf("R\n")
-			rand.Shuffle(len(topics), func(i, j int) { topics[i], topics[j] = topics[j], topics[i] })
+			rand.Shuffle(len(selected), func(i, j int) { selected[i], selected[j] = selected[j], selected[i] })
 		default:
 			fmt.Printf("\n  %sPlease press S or R.%s\n", red, reset)
 			printOrderMenu()
@@ -275,18 +264,15 @@ func runCLI() {
 		break
 	}
 
-	// Step 3: quiz
-	score := runQuiz(topics)
-
-	// Step 4: final score
-	printFinalScore(score, len(topics))
+	score := runQuiz(allTopics, selected)
+	printFinalScore(score, len(selected))
 }
 
 func main() {
-	runBot()
-	//if len(os.Args) > 1 && os.Args[1] == "bot" {
-	//	runBot()
-	//	return
-	//}
-	//runCLI()
+	store, err := storage.NewJSONTopicStore("data/topics.json")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to load topics: %v\n", err)
+		os.Exit(1)
+	}
+	runCLI(store)
 }

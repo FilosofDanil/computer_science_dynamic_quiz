@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"bufio"
@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// loadDotEnv reads key=value pairs from path and sets them via os.Setenv.
+// LoadDotEnv reads key=value pairs from path and sets them via os.Setenv.
 // Blank lines and lines starting with # are skipped.
 // Already-set environment variables are not overwritten.
-func loadDotEnv(path string) error {
+func LoadDotEnv(path string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -29,7 +29,6 @@ func loadDotEnv(path string) error {
 		}
 		key := strings.TrimSpace(line[:idx])
 		val := strings.TrimSpace(line[idx+1:])
-		// Strip surrounding single or double quotes
 		if len(val) >= 2 {
 			if (val[0] == '"' && val[len(val)-1] == '"') ||
 				(val[0] == '\'' && val[len(val)-1] == '\'') {
@@ -43,9 +42,9 @@ func loadDotEnv(path string) error {
 	return scanner.Err()
 }
 
-// mustToken returns the TELEGRAM_BOT_TOKEN environment variable or exits
+// MustToken returns the TELEGRAM_BOT_TOKEN environment variable or exits
 // with a helpful message if it is not set.
-func mustToken() string {
+func MustToken() string {
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
 		fmt.Fprintln(os.Stderr, "Error: TELEGRAM_BOT_TOKEN is not set.")
