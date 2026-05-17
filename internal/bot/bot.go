@@ -44,9 +44,10 @@ func (b *Bot) Run(ctx context.Context, token string) error {
 		return fmt.Errorf("bot: create: %w", err)
 	}
 
-	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "/start", tgbot.MatchTypeCommand, b.onStart)
-	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "/help", tgbot.MatchTypeCommand, b.onHelp)
-	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "/quit", tgbot.MatchTypeCommand, b.onQuit)
+	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "start", tgbot.MatchTypeCommand, b.onStart)
+	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "help", tgbot.MatchTypeCommand, b.onHelp)
+	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "quit", tgbot.MatchTypeCommand, b.onQuit)
+	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "", tgbot.MatchTypeContains, b.onText)
 
 	slog.Info("bot started", "topics", len(b.store.All()))
 	fmt.Fprintln(os.Stdout, "Bot is running. Press Ctrl+C to stop.")

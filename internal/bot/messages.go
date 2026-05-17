@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+func unknownCommandText() string {
+	return "I didn't understand that. Use /start to begin a quiz or /help for more info."
+}
+
 func helpText() string {
 	return "🎓 <b>CS Foundations Pyramid — Quiz</b>\n\n" +
 		"A flashcard quiz that drills you on core computer science concepts across 18 categories — " +

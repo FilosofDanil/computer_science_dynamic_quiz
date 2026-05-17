@@ -11,13 +11,28 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
+func (b *Bot) onText(ctx context.Context, tb *tgbot.Bot, update *models.Update) {
+	if update.Message == nil {
+		return
+	}
+	chatID := update.Message.Chat.ID
+	_, _ = tb.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      unknownCommandText(),
+		ParseMode: models.ParseModeHTML,
+	})
+}
+
 func (b *Bot) onDefault(ctx context.Context, tb *tgbot.Bot, update *models.Update) {
 	if update.Message == nil {
 		return
 	}
 	chatID := update.Message.Chat.ID
-	s := b.sessions.Get(chatID)
-	sendOrEdit(ctx, tb, chatID, s, categoryText(), b.categoryKeyboard())
+	_, _ = tb.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      unknownCommandText(),
+		ParseMode: models.ParseModeHTML,
+	})
 }
 
 func (b *Bot) onStart(ctx context.Context, tb *tgbot.Bot, update *models.Update) {
