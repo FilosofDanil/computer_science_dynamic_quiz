@@ -11,6 +11,15 @@ import (
 	"github.com/go-telegram/bot/models"
 )
 
+func (b *Bot) onSettings(ctx context.Context, tb *tgbot.Bot, update *models.Update) {
+	chatID := update.Message.Chat.ID
+	_, _ = tb.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      "settings temporary in development process",
+		ParseMode: models.ParseModeHTML,
+	})
+}
+
 func (b *Bot) onText(ctx context.Context, tb *tgbot.Bot, update *models.Update) {
 	if update.Message == nil {
 		return
