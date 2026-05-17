@@ -27,6 +27,15 @@ func (b *Bot) onStart(ctx context.Context, tb *tgbot.Bot, update *models.Update)
 	sendOrEdit(ctx, tb, chatID, s, categoryText(), b.categoryKeyboard())
 }
 
+func (b *Bot) onHelp(ctx context.Context, tb *tgbot.Bot, update *models.Update) {
+	chatID := update.Message.Chat.ID
+	_, _ = tb.SendMessage(ctx, &tgbot.SendMessageParams{
+		ChatID:    chatID,
+		Text:      helpText(),
+		ParseMode: models.ParseModeHTML,
+	})
+}
+
 func (b *Bot) onQuit(ctx context.Context, tb *tgbot.Bot, update *models.Update) {
 	chatID := update.Message.Chat.ID
 	b.sessions.Delete(chatID)

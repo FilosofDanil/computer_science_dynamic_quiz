@@ -5,6 +5,23 @@ import (
 	"strings"
 )
 
+func helpText() string {
+	return "🎓 <b>CS Foundations Pyramid — Quiz</b>\n\n" +
+		"A flashcard quiz that drills you on core computer science concepts across 18 categories — " +
+		"from CPU internals and OS primitives to networking, system design, and LLMs.\n\n" +
+		"<b>Commands</b>\n" +
+		"/start — start (or restart) a quiz session\n" +
+		"/help  — show this message\n" +
+		"/quit  — end your current session\n\n" +
+		"<b>How it works</b>\n" +
+		"1. Pick a category from the inline keyboard.\n" +
+		"2. Choose <i>In order</i> or <i>Shuffle</i>.\n" +
+		"3. Tap <b>A / B / C / D</b> to answer each question.\n" +
+		"4. After each answer the correct answer, overview, and explanation are shown.\n" +
+		"5. At the end your score is displayed with a <i>Play again</i> button.\n\n" +
+		"Each chat has its own independent session — multiple users can play simultaneously."
+}
+
 func categoryText() string {
 	return "🎓 <b>CS Foundations Pyramid — Quiz</b>\n\nChoose a topic category to practice:"
 }

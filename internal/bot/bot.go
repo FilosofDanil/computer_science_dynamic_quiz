@@ -45,6 +45,7 @@ func (b *Bot) Run(ctx context.Context, token string) error {
 	}
 
 	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "/start", tgbot.MatchTypeCommand, b.onStart)
+	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "/help", tgbot.MatchTypeCommand, b.onHelp)
 	tb.RegisterHandler(tgbot.HandlerTypeMessageText, "/quit", tgbot.MatchTypeCommand, b.onQuit)
 
 	slog.Info("bot started", "topics", len(b.store.All()))
