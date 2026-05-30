@@ -13,8 +13,12 @@ build: ## Compile the bot binary into ./bin/
 	go build -trimpath -ldflags="-s -w" -o bin/$(BINARY) $(MAIN)
 
 .PHONY: run
-run: ## Run the bot locally (requires .env with TELEGRAM_BOT_TOKEN)
+run: ## Run the bot locally (requires .env with TELEGRAM_BOT_TOKEN and DATABASE_URL)
 	go run $(MAIN)
+
+.PHONY: migrate
+migrate: ## Seed PostgreSQL with curated tests from data/topics.json (requires DATABASE_URL)
+	go run ./cmd/migrate
 
 .PHONY: test
 test: ## Run all tests

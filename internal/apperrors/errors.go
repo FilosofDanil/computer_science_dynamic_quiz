@@ -14,4 +14,11 @@ var (
 
 	// ErrNoTopics is returned when a category filter produces an empty list.
 	ErrNoTopics = errors.New("no topics found for category")
+
+	// ErrTestNotFound is returned when a test lookup, update, or delete finds
+	// no matching row (e.g. unknown id, or a delete that the user does not own).
+	ErrTestNotFound = errors.New("test not found")
+
+	// ErrInvalidTest is returned when user-supplied test JSON fails validation.
+	ErrInvalidTest = errors.New("invalid test")
 )

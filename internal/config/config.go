@@ -53,3 +53,30 @@ func MustToken() string {
 	}
 	return token
 }
+
+// MustDatabaseURL returns the DATABASE_URL environment variable or exits with
+// a helpful message if it is not set. The value is a standard PostgreSQL
+// connection string, e.g. postgres://user:pass@host:5432/dbname?sslmode=disable.
+func MustDatabaseURL() string {
+	url := os.Getenv("DATABASE_URL")
+	if url == "" {
+		fmt.Fprintln(os.Stderr, "Error: DATABASE_URL is not set.")
+		fmt.Fprintln(os.Stderr, "Copy .env.example to .env and set your PostgreSQL connection string.")
+		fmt.Fprintln(os.Stderr, "Example: postgres://user:pass@localhost:5432/quizbot?sslmode=disable")
+		os.Exit(1)
+	}
+	return url
+}
+
+// ClaudeAPIKey returns the ANTHROPIC_API_KEY environment variable. It is
+// optional: when empty, AI-assisted test generation is disabled and the rest of
+// the bot keeps working.
+func ClaudeAPIKey() string {
+	return os.Getenv("ANTHROPIC_API_KEY")
+}
+
+// ClaudeModel returns the ANTHROPIC_MODEL override, or an empty string to let
+// the AI client choose its default model.
+func ClaudeModel() string {
+	return os.Getenv("ANTHROPIC_MODEL")
+}

@@ -47,16 +47,25 @@ Railway will detect the `Dockerfile` at the root automatically — no extra conf
 
 ---
 
-## Step 4 — Set the environment variable
+## Step 4 — Add a PostgreSQL database
 
-The bot **will not start** without `TELEGRAM_BOT_TOKEN`. Add it before the first deploy:
+The bot stores all tests (quiz sets) in PostgreSQL, so it needs a database.
 
-1. In your Railway project, open the **Variables** tab (left sidebar).
-2. Click **+ New Variable**.
-3. Set:
-   - **Name:** `TELEGRAM_BOT_TOKEN`
-   - **Value:** your token from Step 1
-4. Optionally add:
+1. In your Railway project, click **+ New** → **Database** → **Add PostgreSQL**.
+2. Railway provisions the database and exposes a `DATABASE_URL` connection string for it.
+3. The bot creates its `tests` table automatically on first startup — no manual SQL needed.
+
+---
+
+## Step 5 — Set the environment variables
+
+The bot **will not start** without `TELEGRAM_BOT_TOKEN` and `DATABASE_URL`. Add them before the first deploy:
+
+1. In your Railway project, open the bot service's **Variables** tab (left sidebar).
+2. Add:
+   - **`TELEGRAM_BOT_TOKEN`** — your token from Step 1.
+   - **`DATABASE_URL`** — reference the Postgres plugin's variable. In Railway you can add a variable referencing `${{ Postgres.DATABASE_URL }}` so it stays in sync.
+3. Optionally add:
    - `LOG_FORMAT` = `json` *(already the Docker default — cleaner logs in Railway)*
    - `LOG_LEVEL` = `info` or `debug`
 
@@ -64,7 +73,23 @@ The bot **will not start** without `TELEGRAM_BOT_TOKEN`. Add it before the first
 
 ---
 
-## Step 5 — Deploy
+## Step 6 — Seed the curated tests (one-shot)
+
+The database starts empty. To load the bundled curated tests from `data/topics.json`,
+run the migration command once against the production database:
+
+```bash
+# Locally, pointing at the Railway Postgres connection string:
+DATABASE_URL="<railway-postgres-url>" go run ./cmd/migrate
+```
+
+This groups the curated topics by category and inserts one global test per
+category. It is idempotent, so re-running it only adds categories that are
+missing. Users can then add their own tests through the bot with `/newtest`.
+
+---
+
+## Step 7 — Deploy
 
 Railway triggers a deployment automatically when you push to the tracked branch (`main` by default), or you can kick one off manually:
 
@@ -80,7 +105,7 @@ time=... level=INFO msg="bot started"
 
 ---
 
-## Step 6 — Verify the bot is alive
+## Step 8 — Verify the bot is alive
 
 1. Open Telegram and find your bot by its username.
 2. Send `/start` — you should get the welcome reply immediately.
@@ -117,7 +142,9 @@ Press `Ctrl+C` to stop the container.
 
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
-| Build fails: `TELEGRAM_BOT_TOKEN is not set` | Variable not added | Add it in Railway **Variables** tab |
-| Build fails: `failed to load topic store` | `data/topics.json` not found | Make sure the file is committed to git |
+| Startup error: `TELEGRAM_BOT_TOKEN is not set` | Variable not added | Add it in Railway **Variables** tab |
+| Startup error: `DATABASE_URL is not set` | Variable not added | Add the PostgreSQL plugin and set `DATABASE_URL` (Step 4–5) |
+| Startup error: `failed to open test store` | Database unreachable or wrong URL | Verify the Postgres plugin is running and `DATABASE_URL` is correct |
+| Bot starts but the test menu is empty | Curated tests not seeded | Run the migration (Step 6), or create a test with `/newtest` |
 | Bot starts but does not respond | Wrong token or bot not activated | Double-check the token; send `/start` to the bot first |
 | Image build error on `golang:1.26-alpine` | Go 1.26 image not yet published | Change the `FROM` line in `Dockerfile` to `golang:1.24-alpine` |

@@ -14,29 +14,35 @@ The bot receives updates from Telegram via **long-polling** (`b.Start(ctx)`), no
 basics/
   cmd/
     bot/main.go              # primary entrypoint — wires all layers and starts the bot
+    migrate/main.go          # one-shot seeder: data/topics.json → PostgreSQL (curated tests)
   internal/
     bot/                     # bot service layer
-      bot.go                 # Bot struct, Run(), sendOrEdit helper
-      handlers.go            # onStart, onQuit, onCallback* — methods on Bot
-      keyboards.go           # inline keyboard builders
+      bot.go                 # Bot struct, Run(), sendTestMenu, sendOrEdit helper
+      handlers.go            # onStart, onQuit, onCallback* (quiz flow) — methods on Bot
+      manage.go              # test CRUD handlers + AI generation + validation
+      keyboards.go           # inline keyboard builders (test menu, manage, delete confirm)
       messages.go            # message text builders + HTML helpers
       session.go             # SessionStore interface + InMemorySessionStore
       errors.go              # handleErr helper
+    ai/                      # AI integration layer
+      claude.go              # Anthropic/Claude client — generates tests from a description
     quiz/                    # business-logic layer
-      topic.go               # Topic struct
-      categories.go          # CategoryMenu, CountInCategory, FilterTopics
+      topic.go               # Topic struct (one quiz question)
+      categories.go          # CategoryMenu, CountInCategory, FilterTopics (used by CLI/migration)
       options.go             # BuildOptions (4-choice distractor generator)
     storage/                 # persistence layer
-      store.go               # TopicStore interface
-      json_store.go          # JSONTopicStore — reads data/topics.json at startup
+      store.go               # TopicStore interface (read-only; used by CLI + migration source)
+      json_store.go          # JSONTopicStore — reads data/topics.json (migration source)
+      test_store.go          # Test struct + TestStore interface (read/write CRUD)
+      pg_store.go            # PGTestStore — PostgreSQL/JSONB implementation
     config/
-      config.go              # LoadDotEnv, MustToken
+      config.go              # LoadDotEnv, MustToken, MustDatabaseURL
     apperrors/
-      errors.go              # sentinel errors (ErrUnknownCategory, ErrInvalidStage, ErrNoTopics)
+      errors.go              # sentinel errors (ErrUnknownCategory, ErrInvalidStage, ErrNoTopics, ErrTestNotFound, ErrInvalidTest)
   cli/                       # DEPRECATED — terminal quiz interface, not used by the bot
-    main.go                  # runCLI(); shares quiz + storage packages with the bot
+    main.go                  # runCLI(); shares quiz + JSONTopicStore with the original design
   data/
-    topics.json              # all 263 quiz topics (source of truth)
+    topics.json              # curated quiz topics — seed source for the migration
   docs/
     ARCHITECTURE.md          # this file
 ```
@@ -58,15 +64,27 @@ Receives updates from the Telegram library and drives the user through the quiz 
 **Responsibilities:**
 - Registers command and callback-query handlers with the bot library.
 - Reads and writes per-user `Session` state via the `SessionStore`.
-- Calls the quiz layer to filter topics and build answer options.
+- Lists the tests available to a chat, loads a chosen test's questions, and builds answer options.
+- Lets users create and edit their own tests by describing them; the bot calls Claude (via `internal/ai`) to generate the questions, then validates and saves them. Users can also delete their own tests.
 - Renders messages and inline keyboards, then sends or edits them via `sendOrEdit`.
 - Logs errors and sends user-friendly fallback messages on failure.
+
+**Commands:**
+
+| Command | Purpose |
+|---|---|
+| `/start` | Show the test-selection menu and start a quiz |
+| `/mytests` | List the user's own tests with edit / delete buttons |
+| `/newtest` | Generate a new test with AI from a short description |
+| `/settings` | Show test-management help |
+| `/help`, `/quit` | Help text / end the session |
 
 **Key types:**
 ```go
 type Bot struct {
-    store    storage.TopicStore
+    store    storage.TestStore
     sessions SessionStore
+    gen      TestGenerator // optional Claude client; nil = AI disabled
 }
 ```
 
@@ -90,21 +108,43 @@ The `CategoryMenu` slice defines the ordered list of selectable categories shown
 
 ### 4. Persistence Layer (`internal/storage`)
 
-Responsible for loading and serving topic data.
+Responsible for storing and serving **tests**. A *test* is a named set of quiz
+questions persisted as a single JSON document. Curated tests are global
+(`owner_chat IS NULL`); user-created tests belong to the chat that made them.
 
 **Interface:**
 ```go
-type TopicStore interface {
-    All() []quiz.Topic
-    ByCategory(cat string) []quiz.Topic
+type TestStore interface {
+    ListAvailable(chatID int64) ([]Test, error) // global + owned by chatID
+    ListOwned(chatID int64) ([]Test, error)
+    Get(id int64) (Test, error)
+    Create(t Test) (int64, error)
+    Update(t Test) error            // owner-scoped
+    Delete(id, ownerChat int64) error
 }
 ```
 
-**Current implementation — `JSONTopicStore`:**
-- Reads `data/topics.json` once at startup into memory.
-- `ByCategory("")` returns all topics.
-- The file is never written at runtime; it is the authoritative topic catalogue.
-- A different implementation (database, remote API) can be swapped in by satisfying the `TopicStore` interface — no other layer changes.
+**Implementation — `PGTestStore` (PostgreSQL):**
+- Connects with `pgxpool` and runs `CREATE TABLE IF NOT EXISTS` on startup, so a fresh database is self-bootstrapping.
+- Each test is one row; its questions live in a `JSONB` `data` column (`{ "questions": [ ... ] }`).
+- Writes are ownership-scoped in SQL: `Update`/`Delete` only affect rows whose `owner_chat` matches the caller, so users cannot modify each other's (or curated) tests.
+
+**Schema:**
+```sql
+CREATE TABLE tests (
+    id          BIGSERIAL PRIMARY KEY,
+    owner_chat  BIGINT,                       -- NULL = curated/global
+    title       TEXT        NOT NULL,
+    data        JSONB       NOT NULL,         -- { "questions": [ {Name, Overview, Question, Explanation, Layer}, ... ] }
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX tests_owner_idx ON tests (owner_chat);
+```
+
+**Legacy `TopicStore` / `JSONTopicStore`:** retained as the read-only source for
+the one-shot migration (`cmd/migrate`) and the deprecated CLI. The bot itself no
+longer reads `data/topics.json` at runtime.
 
 ---
 
@@ -132,6 +172,10 @@ type SessionStore interface {
 stageCategory → stageOrder → stageQuiz ↔ stageReveal → stageDone
      ↑                                                      |
      └──────────────────────────── "Play again" ────────────┘
+
+Test management (entered via /newtest or the ✏️ edit button):
+stageAwaitNewTest  ─ user describes test ─► Claude generates ─► Create ─► stageCategory
+stageAwaitEditTest ─ user describes test ─► Claude generates ─► Update ─► stageCategory
 ```
 
 ---
@@ -143,13 +187,14 @@ Telegram ──long-poll──► internal/bot
                               │
                      reads/writes SessionStore (in-memory)
                               │
-                         calls internal/quiz
+                  reads/writes via TestStore interface
                               │
-                    reads via TopicStore interface
+                     internal/storage/PGTestStore
                               │
-                     internal/storage/JSONTopicStore
-                              │
-                         data/topics.json
+                       PostgreSQL (tests, JSONB)
+
+Seeding (one-shot):
+  data/topics.json ──► cmd/migrate ──group by category──► PostgreSQL (curated tests)
 ```
 
 ---
@@ -158,8 +203,9 @@ Telegram ──long-poll──► internal/bot
 
 | Situation | Behaviour |
 |---|---|
-| Missing token or unreadable `topics.json` at startup | `slog.Error` + `os.Exit(1)` (fail fast) |
-| Unknown category or invalid stage in a callback | Log error with `chatID` + `err`, send user-friendly fallback message |
+| Missing token, missing `DATABASE_URL`, or unreachable database at startup | `slog.Error` + `os.Exit(1)` (fail fast) |
+| Invalid user-submitted test JSON | Validation message back to the user; session stays in the await stage so they can resend |
+| Unknown test/category or invalid stage in a callback | Log error with `chatID` + `err`, send user-friendly fallback message |
 | Telegram `EditMessage` failure | Log at `slog.LevelDebug`, fall back to sending a new message |
 | `SendMessage` failure | Log at `slog.LevelError` |
 | Any handler error | `handleErr(ctx, b, chatID, err, userMsg)` in `internal/bot/errors.go` handles logging + fallback uniformly |
@@ -183,15 +229,22 @@ go run ./cli
 ## Running the Bot
 
 ```bash
-cp .env.example .env       # add your TELEGRAM_BOT_TOKEN
+cp .env.example .env       # set TELEGRAM_BOT_TOKEN and DATABASE_URL
+go run ./cmd/migrate       # seed PostgreSQL with curated tests (run once)
 go run ./cmd/bot           # start the bot
 ```
 
-Optional environment variables:
+The bot creates the `tests` table automatically on startup; the migration step
+only seeds the curated content from `data/topics.json`.
+
+Environment variables:
 
 | Variable | Default | Description |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | (required) | Token from @BotFather |
-| `TOPICS_PATH` | `data/topics.json` | Path to the topic catalogue |
+| `DATABASE_URL` | (required) | PostgreSQL connection string |
+| `ANTHROPIC_API_KEY` | (optional) | Enables AI test generation (`/newtest`); see INSTRUCTION.md |
+| `ANTHROPIC_MODEL` | (optional) | Override the Claude model (defaults to a Haiku model) |
+| `TOPICS_PATH` | `data/topics.json` | Seed source used only by `cmd/migrate` |
 | `LOG_LEVEL` | `info` | `debug` or `info` |
 | `LOG_FORMAT` | `text` | `text` or `json` |

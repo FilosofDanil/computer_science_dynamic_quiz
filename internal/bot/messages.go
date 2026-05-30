@@ -11,14 +11,17 @@ func unknownCommandText() string {
 
 func helpText() string {
 	return "🎓 <b>CS Foundations Pyramid — Quiz</b>\n\n" +
-		"A flashcard quiz that drills you on core computer science concepts across 18 categories — " +
-		"from CPU internals and OS primitives to networking, system design, and LLMs.\n\n" +
+		"A flashcard quiz that drills you on core computer science concepts. " +
+		"Curated tests ship with the bot, and you can create your own.\n\n" +
 		"<b>Commands</b>\n" +
 		"/start — start (or restart) a quiz session\n" +
+		"/mytests — manage the tests you created (edit / delete)\n" +
+		"/newtest — generate a new test with AI from a short description\n" +
+		"/settings — show test-management help\n" +
 		"/help  — show this message\n" +
 		"/quit  — end your current session\n\n" +
 		"<b>How it works</b>\n" +
-		"1. Pick a category from the inline keyboard.\n" +
+		"1. Pick a test from the inline keyboard.\n" +
 		"2. Choose <i>In order</i> or <i>Shuffle</i>.\n" +
 		"3. Tap <b>A / B / C / D</b> to answer each question.\n" +
 		"4. After each answer the correct answer, overview, and explanation are shown.\n" +
@@ -27,7 +30,75 @@ func helpText() string {
 }
 
 func categoryText() string {
-	return "🎓 <b>CS Foundations Pyramid — Quiz</b>\n\nChoose a topic category to practice:"
+	return "🎓 <b>CS Foundations Pyramid — Quiz</b>\n\nChoose a test to practice (👤 marks tests you created):"
+}
+
+func noTestsText() string {
+	return "There are no tests available yet.\n\nUse /newtest to create your first test."
+}
+
+func noOwnedTestsText() string {
+	return "You haven't created any tests yet.\n\nUse /newtest to add one."
+}
+
+func myTestsText() string {
+	return "📚 <b>Your tests</b>\n\nTap ✏️ to replace a test with new JSON, or 🗑 to delete it."
+}
+
+func manageMenuText() string {
+	return "⚙️ <b>Manage your tests</b>\n\n" +
+		"/mytests — list your tests with edit and delete buttons\n" +
+		"/newtest — generate a new test with AI from a short description\n\n" +
+		"Tests you create are private to this chat. Curated tests are shared and read-only."
+}
+
+// testPromptText asks the user to describe the test they want generated.
+func testPromptText(editing bool) string {
+	action := "Describe the test you'd like me to create"
+	if editing {
+		action = "Describe the new test to replace this one"
+	}
+	return fmt.Sprintf(
+		"🤖 %s and I'll generate it with AI.\n\n"+
+			"<b>Examples</b>\n"+
+			"• <i>Create a test with 10 questions about Africa</i>\n"+
+			"• <i>5 questions on the basics of Go concurrency</i>\n"+
+			"• <i>A quiz about the water cycle for beginners</i>\n\n"+
+			"Just send your description as a message. Send /quit to cancel.",
+		action,
+	)
+}
+
+func aiUnavailableText() string {
+	return "🤖 AI test generation isn't configured on this bot.\n\n" +
+		"An <code>ANTHROPIC_API_KEY</code> needs to be set. See INSTRUCTION.md for setup steps."
+}
+
+func generatingText() string {
+	return "⏳ Generating your test with AI… this can take a few seconds."
+}
+
+func testSavedText(title string, n int, id int64, edited bool) string {
+	verb := "created"
+	if edited {
+		verb = "updated"
+	}
+	return fmt.Sprintf(
+		"✅ Test %s!\n\n<b>%s</b> — %d question(s) (id %d).\n\nSend /start to play it.",
+		verb, escapeHTML(title), n, id,
+	)
+}
+
+func deleteConfirmText(title string) string {
+	return fmt.Sprintf("🗑 Delete <b>%s</b>? This cannot be undone.", escapeHTML(title))
+}
+
+func deletedText() string {
+	return "🗑 Test deleted."
+}
+
+func deleteCancelledText() string {
+	return "↩️ Deletion cancelled."
 }
 
 func orderText(count int) string {

@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"time"
 
+	"basics/internal/ai"
 	"basics/internal/bot"
 	"basics/internal/config"
 	"basics/internal/storage"
@@ -28,20 +30,29 @@ func main() {
 	// ── Config ───────────────────────────────────────────────────────────────
 	_ = config.LoadDotEnv(".env")
 	token := config.MustToken()
+	dbURL := config.MustDatabaseURL()
 
 	// ── Persistence ──────────────────────────────────────────────────────────
-	topicsPath := "data/topics.json"
-	if p := os.Getenv("TOPICS_PATH"); p != "" {
-		topicsPath = p
-	}
-	store, err := storage.NewJSONTopicStore(topicsPath)
+	connectCtx, connectCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	store, err := storage.NewPGTestStore(connectCtx, dbURL)
+	connectCancel()
 	if err != nil {
-		slog.Error("failed to load topic store", "path", topicsPath, "err", err)
+		slog.Error("failed to open test store", "err", err)
 		os.Exit(1)
+	}
+	defer store.Close()
+
+	// ── AI test generation (optional) ─────────────────────────────────────────
+	var gen bot.TestGenerator
+	if key := config.ClaudeAPIKey(); key != "" {
+		gen = ai.NewClient(key, config.ClaudeModel())
+		slog.Info("AI test generation enabled")
+	} else {
+		slog.Warn("ANTHROPIC_API_KEY not set; /newtest AI generation disabled")
 	}
 
 	// ── Bot ──────────────────────────────────────────────────────────────────
-	b := bot.New(store)
+	b := bot.New(store, gen)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()

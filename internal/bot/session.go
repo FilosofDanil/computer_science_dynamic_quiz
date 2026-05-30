@@ -15,6 +15,10 @@ const (
 	stageQuiz
 	stageReveal
 	stageDone
+	// stageAwaitNewTest waits for the user to send JSON for a brand-new test.
+	stageAwaitNewTest
+	// stageAwaitEditTest waits for the user to send JSON replacing editTestID.
+	stageAwaitEditTest
 )
 
 // Session holds all per-user state for an in-progress quiz.
@@ -26,6 +30,8 @@ type Session struct {
 	options    []string
 	correctIdx int
 	lastMsgID  int
+	// editTestID is the id of the test being edited while in stageAwaitEditTest.
+	editTestID int64
 }
 
 // SessionStore manages per-chat sessions.
